@@ -131,6 +131,8 @@ def _fetch_jsearch(keyword: str, limit: int, params: dict[str, Any]) -> list[dic
             "id": f"jsearch:{j['job_id']}",
             "title": j.get("job_title", "Untitled"),
             "company": j.get("employer_name", "Unknown"),
+            "publisher": j.get("job_publisher", ""),
+            "location": j.get("job_country") or country.upper(),
             "url": j.get("job_apply_link", ""),
         }
         for j in resp.json().get("data", [])[:limit]
@@ -194,13 +196,16 @@ class JobFeedChecker(BaseChecker):
         if not new_jobs:
             return CheckResult(should_notify=False)
 
-        label = html.escape(f"{source.title()} - {keyword or 'All'}")
-        lines = [f"<b>New Jobs ({label})</b>\n"]
+        country = params.get("country", "")
+        header_suffix = f" ({country.upper()})" if country else ""
+        lines = [f"<b>New Jobs — {html.escape(source.title())}{html.escape(header_suffix)}</b>\n"]
         for job in new_jobs:
             title = html.escape(job["title"])
             company = html.escape(job["company"])
             url = job["url"]
-            lines.append(f"• <a href=\"{url}\">{title}</a> — {company}")
+            extra_parts = [p for p in (job.get("publisher"), job.get("location")) if p]
+            extra = f" [{html.escape(' · '.join(extra_parts))}]" if extra_parts else ""
+            lines.append(f"• <a href=\"{url}\">{title}</a> — {company}{extra}")
 
         updated_seen = (seen_ids + [j["id"] for j in new_jobs])[-200:]
         return CheckResult(
