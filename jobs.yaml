@@ -1,0 +1,91 @@
+jobs:
+  - name: "Remote Python Jobs (Remotive)"
+    type: "job_feed"
+    schedule: "0 */1 * * *" # Every hour
+    enabled: true
+    # target_chat_id: "@your_public_channel" # Optional: overrides DEFAULT_CHAT_ID
+    params:
+      source: "remotive"
+      keyword: "python"
+      limit: 5
+
+  - name: "Remote Python Jobs (Arbeitnow)"
+    type: "job_feed"
+    schedule: "0 */1 * * *"
+    enabled: true
+    params:
+      source: "arbeitnow"
+      keyword: "python"
+      limit: 5
+
+  - name: "Remote Python Jobs (Jobicy)"
+    type: "job_feed"
+    schedule: "0 */1 * * *"
+    enabled: true
+    params:
+      source: "jobicy"
+      keyword: "python"
+      limit: 5
+
+  - name: "Remote Python Jobs (Himalayas)"
+    type: "job_feed"
+    schedule: "0 */1 * * *"
+    enabled: true
+    params:
+      source: "himalayas"
+      keyword: "python"
+      limit: 5
+
+  - name: "Indonesia Tech & Language Jobs (JSearch / LinkedIn)"
+    type: "job_feed"
+    schedule: "0 9 * * *" # Daily at 9:00 AM (4 countries = ~120 requests/month)
+    enabled: true
+    params:
+      source: "jsearch"
+      keyword: "developer OR programmer OR software OR translator OR penerjemah OR interpreter OR transkripsi OR transcription"
+      country: "id"
+      date_posted: "today"
+      limit: 10
+
+  - name: "Malaysia Tech & Language Jobs (JSearch / LinkedIn)"
+    type: "job_feed"
+    schedule: "0 9 * * *"
+    enabled: true
+    params:
+      source: "jsearch"
+      keyword: "developer OR programmer OR software OR translator OR interpreter OR transcription"
+      country: "my"
+      date_posted: "today"
+      limit: 10
+
+  - name: "Singapore Tech & Language Jobs (JSearch / LinkedIn)"
+    type: "job_feed"
+    schedule: "0 9 * * *"
+    enabled: true
+    params:
+      source: "jsearch"
+      keyword: "developer OR programmer OR software OR translator OR interpreter OR transcription"
+      country: "sg"
+      date_posted: "today"
+      limit: 10
+
+  - name: "Australia Tech & Language Jobs (JSearch / LinkedIn)"
+    type: "job_feed"
+    schedule: "0 9 * * *"
+    enabled: true
+    params:
+      source: "jsearch"
+      keyword: "developer OR programmer OR software OR translator OR interpreter OR transcription"
+      country: "au"
+      date_posted: "today"
+      limit: 10
+
+  - name: "Example Price Drop"
+    type: "price_drop"
+    schedule: "*/30 * * * *" # Every 30 minutes
+    enabled: false
+    params:
+      url: "https://example.com/product"
+      css_selector: ".price"
+      target_price: 100.0
+
