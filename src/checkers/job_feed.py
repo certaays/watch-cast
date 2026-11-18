@@ -1,5 +1,6 @@
 import html
 import os
+import xml.etree.ElementTree as ET
 from typing import Any, Callable
 
 import httpx
@@ -167,6 +168,27 @@ def _fetch_adzuna(keyword: str, limit: int, params: dict[str, Any]) -> list[dict
     ]
 
 
+def _fetch_rss(keyword: str, limit: int, params: dict[str, Any]) -> list[dict[str, str]]:
+    feed_url = params.get("url", "")
+    if not feed_url:
+        raise ValueError("url is required for rss source")
+    resp = httpx.get(feed_url, timeout=15.0, follow_redirects=True)
+    resp.raise_for_status()
+    root = ET.fromstring(resp.text)
+    kw = keyword.lower()
+    results = []
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "Untitled").strip()
+        link = (item.findtext("link") or "").strip()
+        guid = (item.findtext("guid") or link or title).strip()
+        if kw and kw not in title.lower():
+            continue
+        results.append({"id": f"rss:{guid}", "title": title, "company": "RSS", "url": link})
+        if len(results) >= limit:
+            break
+    return results
+
+
 SOURCE_FETCHERS: dict[str, Callable[[str, int, dict[str, Any]], list[dict[str, str]]]] = {
     "remotive": _fetch_remotive,
     "arbeitnow": _fetch_arbeitnow,
@@ -175,6 +197,7 @@ SOURCE_FETCHERS: dict[str, Callable[[str, int, dict[str, Any]], list[dict[str, s
     "himalayas": _fetch_himalayas,
     "jsearch": _fetch_jsearch,
     "adzuna": _fetch_adzuna,
+    "rss": _fetch_rss,
 }
 
 

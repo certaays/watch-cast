@@ -28,3 +28,10 @@ def load_config(path: str | Path = "jobs.yaml") -> AppConfig:
         raw = yaml.safe_load(f) or {}
     return AppConfig(**raw)
 
+
+def save_config(config: AppConfig, path: str | Path = "jobs.yaml") -> None:
+    """Persist job definitions back to a YAML file."""
+    data = {"jobs": [job.model_dump(exclude_none=True) for job in config.jobs]}
+    with open(path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+
