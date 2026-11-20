@@ -19,6 +19,11 @@ class TelegramNotifier:
         self.dry_run = dry_run
         self.base_url = f"https://api.telegram.org/bot{bot_token}"
 
+    @property
+    def is_effective_dry_run(self) -> bool:
+        """Whether notifications are suppressed due to dry-run mode or missing token."""
+        return self.dry_run or not self.bot_token
+
     def send(self, message: str, chat_id: str | None = None) -> None:
         """Send a Markdown-formatted message to the target Telegram chat."""
         target = chat_id or self.default_chat_id

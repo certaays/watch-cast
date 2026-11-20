@@ -80,3 +80,11 @@ jobs:
     url: https://example.com/product
     css_selector: .price
     target_price: 100.0
+- name: Cool Facts Every 30m
+  type: cool_fact
+  schedule: '*/30 * * * *'
+  enabled: true
+  target_chat_id: '@fyifacts'
+  params:
+    source: uselessfacts
+    language: en

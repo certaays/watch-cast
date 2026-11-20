@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WatchCast Mission Control</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased selection:bg-sky-500/30">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <!-- Header -->
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-800/80 pb-5">
+      <div class="space-y-1.5">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <h1 class="text-2xl font-bold tracking-tight text-sky-400">WatchCast</h1>
+          <span class="text-xs font-medium uppercase tracking-wider text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-md">
+            Mission Control
+          </span>
+          <span id="schedulerPill" class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+            <span id="schedulerDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+            <span id="schedulerText">Connecting...</span>
+          </span>
+          <span id="dryRunBadge" class="hidden inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300">
+            DRY RUN MODE
+          </span>
+        </div>
+        <p class="text-sm text-slate-400">
+          Live cron orchestration, dry-run inspection, execution telemetry, and price trends
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="reloadBtn" onclick="reloadYaml()" class="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-200 font-medium rounded-lg px-3 py-2 text-xs transition">
+          Reload YAML
+        </button>
+        <button id="refreshBtn" onclick="refreshAll(true)" class="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-200 font-medium rounded-lg px-3 py-2 text-xs transition">
+          Refresh
+        </button>
+        <button onclick="openAddModal()" class="inline-flex items-center gap-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold rounded-lg px-4 py-2 text-xs transition shadow-sm shadow-sky-500/20">
+          + Add Job
+        </button>
+      </div>
+    </header>
+
+    <!-- KPI Strip -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+        <div class="text-xs font-medium text-slate-400">Active Jobs</div>
+        <div class="mt-1.5 flex items-baseline gap-2">
+          <span id="kpiActive" class="text-2xl font-bold text-slate-100">-</span>
+          <span id="kpiTotalSub" class="text-xs text-slate-500">of - configured</span>
+        </div>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+        <div class="text-xs font-medium text-slate-400">Alerts (24h)</div>
+        <div class="mt-1.5 flex items-baseline gap-2">
+          <span id="kpiAlerts24h" class="text-2xl font-bold text-sky-400">-</span>
+          <span class="text-xs text-slate-500">notifications</span>
+        </div>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+        <div class="text-xs font-medium text-slate-400">Errors (24h)</div>
+        <div class="mt-1.5 flex items-baseline gap-2">
+          <span id="kpiErrors24h" class="text-2xl font-bold text-emerald-400">-</span>
+          <span class="text-xs text-slate-500">failed checks</span>
+        </div>
+      </div>
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+        <div class="text-xs font-medium text-slate-400">Total Runs</div>
+        <div class="mt-1.5 flex items-baseline gap-2">
+          <span id="kpiTotalRuns" class="text-2xl font-bold text-slate-100">-</span>
+          <span id="kpiLastSync" class="text-xs text-slate-500">logged</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main 12-Column Grid -->
+    <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <!-- Left: Scheduled Jobs (7 cols) -->
+      <section class="lg:col-span-7 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg p-1 w-fit">
+            <button data-job-filter="all" onclick="setJobFilter('all')" class="job-filter-btn px-2.5 py-1 rounded-md text-xs font-medium bg-sky-500/20 text-sky-300">All</button>
+            <button data-job-filter="active" onclick="setJobFilter('active')" class="job-filter-btn px-2.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200">Active</button>
+            <button data-job-filter="paused" onclick="setJobFilter('paused')" class="job-filter-btn px-2.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200">Paused</button>
+            <button data-job-filter="errors" onclick="setJobFilter('errors')" class="job-filter-btn px-2.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200">Errors</button>
+          </div>
+          <input id="jobSearch" type="search" oninput="renderJobs()" placeholder="Filter jobs by name, source, keyword..." class="bg-slate-900 border border-slate-800 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 w-full sm:w-64" />
+        </div>
+
+        <div id="jobsList" class="space-y-3"></div>
+      </section>
+
+      <!-- Right: Activity & Alert Feed (5 cols) -->
+      <section class="lg:col-span-5 bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-4">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-100">Activity &amp; Alert Feed</h2>
+            <p class="text-xs text-slate-500">Latest checker runs and dispatched alerts</p>
+          </div>
+          <div class="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-1">
+            <button data-run-filter="all" onclick="setRunFilter('all')" class="run-filter-btn px-2.5 py-1 rounded-md text-xs font-medium bg-sky-500/20 text-sky-300">All</button>
+            <button data-run-filter="notified" onclick="setRunFilter('notified')" class="run-filter-btn px-2.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200">Alerts</button>
+            <button data-run-filter="error" onclick="setRunFilter('error')" class="run-filter-btn px-2.5 py-1 rounded-md text-xs font-medium text-slate-400 hover:text-slate-200">Errors</button>
+          </div>
+        </div>
+
+        <div id="runsList" class="space-y-2.5 max-h-[72vh] overflow-y-auto pr-1"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Dry-Run Preview Modal -->
+  <div id="previewModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 id="previewTitle" class="text-base font-semibold text-slate-100">Dry-Run Preview</h2>
+            <span id="previewBadge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">Checking...</span>
+          </div>
+          <p class="text-xs text-amber-300/90 mt-0.5">No Telegram message sent &middot; Saved state unchanged</p>
+        </div>
+        <button onclick="closePreviewModal()" class="text-slate-400 hover:text-slate-200 text-2xl leading-none px-1">&times;</button>
+      </div>
+
+      <div id="previewBody" class="p-5 space-y-3 max-h-[65vh] overflow-y-auto"></div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 bg-slate-950/60 border-t border-slate-800">
+        <span id="previewMeta" class="text-xs text-slate-500"></span>
+        <div class="flex items-center gap-2">
+          <button id="previewFreshBtn" onclick="runPreview(previewJobIndex, true)" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 text-xs font-medium transition">
+            Test as First Run (Ignore Seen State)
+          </button>
+          <button onclick="closePreviewModal()" class="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-semibold transition">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / Edit Job Modal -->
+  <div id="jobModal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-xl space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h2 id="modalTitle" class="text-lg font-semibold">Add New Job</h2>
+        <button onclick="closeJobModal()" class="text-slate-400 hover:text-slate-200 text-2xl leading-none">&times;</button>
+      </div>
+
+      <div id="formError" class="hidden rounded-lg bg-rose-500/15 border border-rose-500/30 px-3 py-2 text-xs text-rose-300"></div>
+
+      <form id="jobForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Job Name</label>
+          <input id="name" placeholder="e.g. Sony XM5 or Remote Python" required class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Checker Type</label>
+          <select id="type" onchange="toggleFields()" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm">
+            <option value="job_feed">Job Feed</option>
+            <option value="price_drop">Price Drop</option>
+            <option value="cool_fact">Cool Fact</option>
+          </select>
+        </div>
+
+        <div class="md:col-span-2 space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs text-slate-400">Cron Schedule</label>
+            <div class="flex flex-wrap gap-1">
+              <button type="button" onclick="setCronPreset('*/15 * * * *')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">*/15 * * * *</button>
+              <button type="button" onclick="setCronPreset('*/30 * * * *')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">*/30 * * * *</button>
+              <button type="button" onclick="setCronPreset('0 */1 * * *')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">Hourly</button>
+              <button type="button" onclick="setCronPreset('0 9 * * *')" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">Daily 09:00</button>
+            </div>
+          </div>
+          <input id="schedule" value="0 */1 * * *" placeholder="Cron (e.g. */30 * * * *)" required class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm font-mono" />
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-xs text-slate-400 mb-1">Target Chat ID (optional)</label>
+          <input id="chatId" placeholder="Leave blank to use DEFAULT_CHAT_ID (e.g. @deals)" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+        </div>
+
+        <div id="priceFields" class="hidden md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="md:col-span-3">
+            <label class="block text-xs text-slate-400 mb-1">Product URL</label>
+            <input id="url" placeholder="https://example.com/product" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs text-slate-400 mb-1">CSS Selector</label>
+            <input id="selector" placeholder="e.g. .price or #priceblock_ourprice" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Target Price</label>
+            <input id="targetPrice" type="number" step="0.01" placeholder="100.00" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+
+        <div id="jobFields" class="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div class="md:col-span-2">
+            <label class="block text-xs text-slate-400 mb-1">Source</label>
+            <select id="source" onchange="toggleRssField()" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm">
+              <option value="remotive">Remotive</option>
+              <option value="arbeitnow">Arbeitnow</option>
+              <option value="remoteok">RemoteOK</option>
+              <option value="jobicy">Jobicy</option>
+              <option value="himalayas">Himalayas</option>
+              <option value="jsearch">JSearch (LinkedIn)</option>
+              <option value="adzuna">Adzuna</option>
+              <option value="rss">Custom RSS Feed</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Country</label>
+            <input id="country" placeholder="e.g. id, sg" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Limit</label>
+            <input id="limit" type="number" min="1" max="50" value="10" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div class="md:col-span-4">
+            <label class="block text-xs text-slate-400 mb-1">Keyword Query</label>
+            <input id="keyword" placeholder="e.g. python or developer OR translator" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div id="rssUrlField" class="hidden md:col-span-4">
+            <label class="block text-xs text-slate-400 mb-1">RSS Feed URL</label>
+            <input id="rssUrl" placeholder="https://example.com/jobs.rss" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+
+        <div id="factFields" class="hidden md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Fact Source</label>
+            <select id="factSource" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm">
+              <option value="uselessfacts">Useless Facts (Random)</option>
+              <option value="catfacts">Cat Facts</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Language</label>
+            <select id="factLanguage" class="w-full bg-slate-800 border border-slate-700 focus:border-sky-500 focus:outline-none rounded-lg px-3 py-2 text-sm">
+              <option value="en">English (en)</option>
+              <option value="de">German (de)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="md:col-span-2 flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeJobModal()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm">Cancel</button>
+          <button id="submitBtn" type="submit" class="bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold rounded-lg px-4 py-2 text-sm">
+            Add Job
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 space-y-2 max-w-sm"></div>
+
+  <script>
+    let cachedJobs = [];
+    let cachedRuns = [];
+    let jobFilter = 'all';
+    let runFilter = 'all';
+    let editingIndex = null;
+    let editingParamsBackup = {};
+    let previewJobIndex = null;
+    let runningJobs = new Set();
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function sanitizeTelegramHtml(rawHtml) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(String(rawHtml || ''), 'text/html');
+
+      function walk(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          return escapeHtml(node.textContent || '');
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+          return '';
+        }
+        const tag = node.tagName.toUpperCase();
+        const children = Array.from(node.childNodes).map(walk).join('');
+        if (tag === 'BR') return '<br />';
+        if (tag === 'B' || tag === 'STRONG') return `<strong class="font-semibold text-slate-100">${children}</strong>`;
+        if (tag === 'I' || tag === 'EM') return `<em class="italic">${children}</em>`;
+        if (tag === 'CODE') return `<code class="px-1 py-0.5 rounded bg-slate-800 text-sky-300 text-xs">${children}</code>`;
+        if (tag === 'PRE') return `<pre class="p-2 rounded bg-slate-950 text-xs overflow-x-auto">${children}</pre>`;
+        if (tag === 'A') {
+          const href = (node.getAttribute('href') || '').trim();
+          try {
+            const parsed = new URL(href);
+            if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+              return `<a href="${escapeHtml(parsed.href)}" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:text-sky-300 underline underline-offset-2">${children}</a>`;
+            }
+          } catch (_) {
+            // Invalid URL falls through to plain text
+          }
+          return children;
+        }
+        return children;
+      }
+
+      return Array.from(doc.body.childNodes).map(walk).join('');
+    }
+
+    function formatRelativeTime(iso) {
+      if (!iso) return 'Never';
+      const ts = new Date(iso).getTime();
+      if (Number.isNaN(ts)) return iso;
+      const diffSec = Math.round((ts - Date.now()) / 1000);
+      const absSec = Math.abs(diffSec);
+      const isFuture = diffSec > 0;
+      let text;
+      if (absSec < 5) return isFuture ? 'in <5s' : 'just now';
+      if (absSec < 60) text = `${absSec}s`;
+      else if (absSec < 3600) text = `${Math.floor(absSec / 60)}m`;
+      else if (absSec < 86400) text = `${Math.floor(absSec / 3600)}h`;
+      else text = `${Math.floor(absSec / 86400)}d`;
+      return isFuture ? `in ${text}` : `${text} ago`;
+    }
+
+    function formatPrice(val) {
+      if (val === null || val === undefined || Number.isNaN(Number(val))) return '-';
+      return Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function showToast(message, tone = 'info') {
+      const container = document.getElementById('toastContainer');
+      const colors = {
+        success: 'bg-emerald-950/95 border-emerald-500/40 text-emerald-200',
+        error: 'bg-rose-950/95 border-rose-500/40 text-rose-200',
+        info: 'bg-slate-900/95 border-sky-500/40 text-slate-100',
+      };
+      const el = document.createElement('div');
+      el.className = `border rounded-xl px-4 py-2.5 text-xs shadow-xl transition-opacity duration-300 ${colors[tone] || colors.info}`;
+      el.textContent = message;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.classList.add('opacity-0');
+        setTimeout(() => el.remove(), 300);
+      }, 3200);
+    }
+
+    function setJobFilter(filter) {
+      jobFilter = filter;
+      document.querySelectorAll('.job-filter-btn').forEach(btn => {
+        const active = btn.dataset.jobFilter === filter;
+        btn.className = `job-filter-btn px-2.5 py-1 rounded-md text-xs font-medium ${active ? 'bg-sky-500/20 text-sky-300' : 'text-slate-400 hover:text-slate-200'}`;
+      });
+      renderJobs();
+    }
+
+    function setRunFilter(filter) {
+      runFilter = filter;
+      document.querySelectorAll('.run-filter-btn').forEach(btn => {
+        const active = btn.dataset.runFilter === filter;
+        btn.className = `run-filter-btn px-2.5 py-1 rounded-md text-xs font-medium ${active ? 'bg-sky-500/20 text-sky-300' : 'text-slate-400 hover:text-slate-200'}`;
+      });
+      loadRuns();
+    }
+
+    function getJobHealth(job) {
+      if (!job.enabled) {
+        return { label: 'Paused', dot: 'bg-slate-500', pill: 'bg-slate-800 text-slate-400 border-slate-700' };
+      }
+      if (!job.last_run) {
+        return { label: 'Idle', dot: 'bg-slate-400', pill: 'bg-slate-800 text-slate-300 border-slate-700' };
+      }
+      if (job.last_run.status === 'error') {
+        return { label: 'Error', dot: 'bg-rose-400', pill: 'bg-rose-500/15 text-rose-300 border-rose-500/30' };
+      }
+      if (job.last_run.status === 'notified') {
+        return { label: 'Notified', dot: 'bg-sky-400', pill: 'bg-sky-500/15 text-sky-300 border-sky-500/30' };
+      }
+      return { label: 'Healthy', dot: 'bg-emerald-400', pill: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' };
+    }
+
+    function describeJobParams(job) {
+      if (job.type === 'price_drop') {
+        const url = job.params?.url || '';
+        const selector = job.params?.css_selector || '';
+        return `${url} · ${selector}`;
+      }
+      if (job.type === 'cool_fact') {
+        const source = job.params?.source || 'uselessfacts';
+        const lang = job.params?.language || 'en';
+        return `${source} · ${lang}`;
+      }
+      const source = job.params?.source || 'remotive';
+      const kw = job.params?.keyword || 'all';
+      const country = job.params?.country ? ` · ${job.params.country.toUpperCase()}` : '';
+      return `${source}${country} · "${kw}"`;
+    }
+
+    function renderSparkline(job) {
+      if (job.type !== 'price_drop') return '';
+      const history = Array.isArray(job.price_history) ? job.price_history : [];
+      const target = Number(job.params?.target_price);
+      const hasTarget = !Number.isNaN(target) && target > 0;
+      const latest = history.length ? history[history.length - 1].price : null;
+
+      let diffBadge = '';
+      if (latest !== null && hasTarget) {
+        const pct = ((latest - target) / target) * 100;
+        const sign = pct > 0 ? '+' : '';
+        const cls = pct <= 0 ? 'text-emerald-300 bg-emerald-500/15 border-emerald-500/30' : 'text-amber-300 bg-amber-500/15 border-amber-500/30';
+        diffBadge = `<span class="text-[11px] font-medium px-2 py-0.5 rounded border ${cls}">${sign}${pct.toFixed(1)}% vs target</span>`;
+      }
+
+      if (history.length < 2) {
+        return `
+          <div class="mt-3 rounded-lg bg-slate-950/70 border border-slate-800/80 px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-3">
+              <span class="text-slate-400">Latest: <strong class="text-slate-200">${latest !== null ? formatPrice(latest) : 'Not checked'}</strong></span>
+              <span class="text-slate-400">Target: <strong class="text-sky-300">${hasTarget ? formatPrice(target) : '-'}</strong></span>
+            </div>
+            <div class="flex items-center gap-2">
+              ${diffBadge}
+              <span class="text-[11px] text-slate-500">Run again to build trend</span>
+            </div>
+          </div>
+        `;
+      }
+
+      const prices = history.map(p => Number(p.price));
+      const allVals = hasTarget ? [...prices, target] : [...prices];
+      const rawMin = Math.min(...allVals);
+      const rawMax = Math.max(...allVals);
+      const pad = rawMax === rawMin ? Math.max(1, rawMax * 0.05) : (rawMax - rawMin) * 0.15;
+      const minVal = rawMin - pad;
+      const maxVal = rawMax + pad;
+      const span = maxVal - minVal || 1;
+
+      const w = 240;
+      const h = 48;
+      const toX = (idx) => (idx / (prices.length - 1)) * (w - 8) + 4;
+      const toY = (val) => h - 6 - ((val - minVal) / span) * (h - 12);
+
+      const coords = prices.map((p, idx) => `${toX(idx).toFixed(1)},${toY(p).toFixed(1)}`);
+      const areaPoints = `${toX(0).toFixed(1)},${h - 4} ${coords.join(' ')} ${toX(prices.length - 1).toFixed(1)},${h - 4}`;
+      const lastX = toX(prices.length - 1).toFixed(1);
+      const lastY = toY(prices[prices.length - 1]).toFixed(1);
+      const targetY = hasTarget ? toY(target).toFixed(1) : null;
+      const gradId = `sparkGrad-${job.index}`;
+
+      const obsMin = Math.min(...prices);
+      const obsMax = Math.max(...prices);
+
+      return `
+        <div class="mt-3 rounded-lg bg-slate-950/70 border border-slate-800/80 p-3 space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="text-slate-400">Now: <strong class="text-slate-100">${formatPrice(latest)}</strong></span>
+              <span class="text-slate-400">Target: <strong class="text-sky-300">${hasTarget ? formatPrice(target) : '-'}</strong></span>
+              <span class="text-slate-500">Min ${formatPrice(obsMin)} / Max ${formatPrice(obsMax)}</span>
+            </div>
+            ${diffBadge}
+          </div>
+          <svg viewBox="0 0 ${w} ${h}" class="w-full h-12 overflow-visible" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.32" />
+                <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+            ${targetY !== null ? `<line x1="0" y1="${targetY}" x2="${w}" y2="${targetY}" stroke="#10b981" stroke-width="1" stroke-dasharray="4 3" opacity="0.7" />` : ''}
+            <polygon points="${areaPoints}" fill="url(#${gradId})" />
+            <polyline fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${coords.join(' ')}" />
+            <circle cx="${lastX}" cy="${lastY}" r="3" fill="#38bdf8" />
+          </svg>
+        </div>
+      `;
+    }
+
+    function renderJobs() {
+      const query = document.getElementById('jobSearch').value.trim().toLowerCase();
+      const filtered = cachedJobs.filter(j => {
+        if (jobFilter === 'active' && !j.enabled) return false;
+        if (jobFilter === 'paused' && j.enabled) return false;
+        if (jobFilter === 'errors' && j.last_run?.status !== 'error') return false;
+        if (query) {
+          const hay = `${j.name} ${j.type} ${JSON.stringify(j.params || {})}`.toLowerCase();
+          if (!hay.includes(query)) return false;
+        }
+        return true;
+      });
+
+      const list = document.getElementById('jobsList');
+      if (!filtered.length) {
+        list.innerHTML = `
+          <div class="bg-slate-900/50 border border-dashed border-slate-800 rounded-xl p-8 text-center text-sm text-slate-400">
+            No jobs match the current filter.
+          </div>
+        `;
+        return;
+      }
+
+      list.innerHTML = filtered.map(j => {
+        const health = getJobHealth(j);
+        const isRunning = runningJobs.has(j.index);
+        const lastRun = j.last_run;
+        const lastRunText = lastRun
+          ? `${formatRelativeTime(lastRun.ran_at)} (${lastRun.duration_ms}ms)`
+          : 'Never';
+        const nextRunText = j.enabled
+          ? (j.next_run_at ? formatRelativeTime(j.next_run_at) : 'Pending')
+          : 'Paused';
+
+        return `
+          <article class="bg-slate-900/90 border border-slate-800 hover:border-slate-700/80 rounded-xl p-4 transition">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div class="space-y-1 min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full border ${health.pill}">
+                    <span class="w-1.5 h-1.5 rounded-full ${health.dot}"></span>
+                    ${health.label}
+                  </span>
+                  <h3 class="font-semibold text-slate-100 truncate">${escapeHtml(j.name)}</h3>
+                  <span class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-sky-300 font-mono">${escapeHtml(j.type)}</span>
+                </div>
+                <div class="text-xs text-slate-400 truncate" title="${escapeHtml(describeJobParams(j))}">
+                  ${escapeHtml(describeJobParams(j))}
+                </div>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 pt-0.5">
+                  <span>Cron: <code class="text-slate-300">${escapeHtml(j.schedule)}</code></span>
+                  <span>Target: <span class="text-slate-300">${escapeHtml(j.target_chat_id || 'DEFAULT_CHAT_ID')}</span></span>
+                  <span>Seen: <span class="text-slate-300">${j.seen_count ?? 0}</span></span>
+                </div>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400 pt-0.5">
+                  <span title="${escapeHtml(lastRun?.ran_at || '')}">Last run: <strong class="font-medium text-slate-200">${escapeHtml(lastRunText)}</strong></span>
+                  <span title="${escapeHtml(j.next_run_at || '')}">Next run: <strong class="font-medium text-slate-200">${escapeHtml(nextRunText)}</strong></span>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+                <button onclick="openPreviewModal(${j.index})" class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition">
+                  Preview
+                </button>
+                <button onclick="runJobNow(${j.index})" ${isRunning ? 'disabled' : ''} class="text-xs px-2.5 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 disabled:opacity-50 transition">
+                  ${isRunning ? 'Running...' : 'Run Now'}
+                </button>
+                <button onclick="editJob(${j.index})" class="text-xs px-2.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 transition">
+                  Edit
+                </button>
+                <button onclick="toggleJob(${j.index})" class="text-xs px-2.5 py-1.5 rounded-lg ${j.enabled ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'} transition">
+                  ${j.enabled ? 'Enabled' : 'Paused'}
+                </button>
+                <button onclick="deleteJob(${j.index})" class="text-xs px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 transition">
+                  Delete
+                </button>
+              </div>
+            </div>
+
+            ${lastRun?.status === 'error' && lastRun.error ? `
+              <div class="mt-3 rounded-lg bg-rose-500/10 border border-rose-500/30 px-3 py-2 text-xs text-rose-300 break-words">
+                <strong class="font-semibold">Last Error:</strong> ${escapeHtml(lastRun.error)}
+              </div>
+            ` : ''}
+
+            ${renderSparkline(j)}
+          </article>
+        `;
+      }).join('');
+    }
+
+    function renderRuns() {
+      const container = document.getElementById('runsList');
+      if (!cachedRuns.length) {
+        container.innerHTML = `
+          <div class="rounded-lg border border-dashed border-slate-800 p-6 text-center text-xs text-slate-500">
+            No runs recorded yet. Trigger a job with "Run Now" or wait for the next cron tick.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = cachedRuns.map(r => {
+        const badgeCls = r.status === 'notified'
+          ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+          : r.status === 'error'
+            ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+        const label = r.status === 'notified' ? 'Alert Sent' : r.status === 'error' ? 'Error' : 'No Changes';
+
+        return `
+          <div class="rounded-lg bg-slate-950/70 border border-slate-800/90 p-3 space-y-2">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-slate-200 truncate">${escapeHtml(r.job_name)}</div>
+                <div class="text-[11px] text-slate-500 mt-0.5" title="${escapeHtml(r.ran_at)}">
+                  ${escapeHtml(formatRelativeTime(r.ran_at))} &middot; ${r.duration_ms}ms &middot; <span class="text-slate-400">${escapeHtml(r.trigger)}</span>
+                </div>
+              </div>
+              <span class="shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full border ${badgeCls}">
+                ${label}
+              </span>
+            </div>
+            ${r.message ? `
+              <div class="text-xs text-slate-300 bg-slate-900/90 border border-slate-800 rounded-md p-2.5 whitespace-pre-wrap break-words leading-relaxed">
+                ${sanitizeTelegramHtml(r.message)}
+              </div>
+            ` : ''}
+            ${r.error ? `
+              <div class="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded-md p-2 break-words">
+                ${escapeHtml(r.error)}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function loadStatus() {
+      const res = await fetch('/api/status');
+      const st = await res.json();
+
+      const dot = document.getElementById('schedulerDot');
+      const txt = document.getElementById('schedulerText');
+      if (st.scheduler_running) {
+        dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+        txt.textContent = 'Scheduler Live';
+      } else {
+        dot.className = 'w-2 h-2 rounded-full bg-slate-500';
+        txt.textContent = 'Scheduler Stopped';
+      }
+
+      document.getElementById('dryRunBadge').classList.toggle('hidden', !st.dry_run);
+      document.getElementById('kpiActive').textContent = st.enabled_jobs;
+      document.getElementById('kpiTotalSub').textContent = `of ${st.total_jobs} configured`;
+      document.getElementById('kpiAlerts24h').textContent = st.stats?.notified_24h ?? 0;
+
+      const errEl = document.getElementById('kpiErrors24h');
+      const errs = st.stats?.errors_24h ?? 0;
+      errEl.textContent = errs;
+      errEl.className = `text-2xl font-bold ${errs > 0 ? 'text-rose-400' : 'text-emerald-400'}`;
+
+      document.getElementById('kpiTotalRuns').textContent = st.stats?.total_runs ?? 0;
+    }
+
+    async function loadJobs() {
+      const res = await fetch('/api/jobs');
+      cachedJobs = await res.json();
+      renderJobs();
+    }
+
+    async function loadRuns() {
+      const params = new URLSearchParams({ limit: '50' });
+      if (runFilter !== 'all') params.set('status', runFilter);
+      const res = await fetch(`/api/runs?${params.toString()}`);
+      cachedRuns = await res.json();
+      renderRuns();
+    }
+
+    async function refreshAll(manual = false) {
+      try {
+        await Promise.all([loadStatus(), loadJobs(), loadRuns()]);
+        if (manual) showToast('Dashboard refreshed', 'info');
+      } catch (err) {
+        showToast(`Refresh failed: ${err.message}`, 'error');
+      }
+    }
+
+    async function reloadYaml() {
+      try {
+        const res = await fetch('/api/jobs/reload', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Reload failed');
+        showToast(`Reloaded YAML (${data.scheduled_jobs} active jobs scheduled)`, 'success');
+        await refreshAll();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function runJobNow(index) {
+      runningJobs.add(index);
+      renderJobs();
+      try {
+        const res = await fetch(`/api/jobs/${index}/run`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Execution failed');
+        if (data.status === 'error') {
+          showToast(`${data.job_name}: Error — ${data.error}`, 'error');
+        } else if (data.should_notify) {
+          showToast(`${data.job_name}: Alert ${data.dry_run ? '(dry-run) ' : ''}dispatched`, 'success');
+        } else {
+          showToast(`${data.job_name}: Checked — no new alerts`, 'info');
+        }
+        await refreshAll();
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        runningJobs.delete(index);
+        renderJobs();
+      }
+    }
+
+    function openPreviewModal(index) {
+      previewJobIndex = index;
+      const job = cachedJobs.find(j => j.index === index);
+      document.getElementById('previewTitle').textContent = `Preview: ${job ? job.name : ''}`;
+      document.getElementById('previewModal').classList.remove('hidden');
+      runPreview(index, false);
+    }
+
+    function closePreviewModal() {
+      document.getElementById('previewModal').classList.add('hidden');
+      previewJobIndex = null;
+    }
+
+    async function runPreview(index, fresh = false) {
+      if (index === null || index === undefined) return;
+      const badge = document.getElementById('previewBadge');
+      const body = document.getElementById('previewBody');
+      const meta = document.getElementById('previewMeta');
+
+      badge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300';
+      badge.textContent = 'Running check...';
+      body.innerHTML = '<div class="text-xs text-slate-400 py-6 text-center">Fetching live source...</div>';
+      meta.textContent = fresh ? 'Mode: Fresh (ignoring seen state)' : 'Mode: Using stored state';
+
+      try {
+        const res = await fetch(`/api/jobs/${index}/preview?fresh=${fresh ? 'true' : 'false'}`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Preview failed');
+
+        meta.textContent = `Duration: ${data.duration_ms}ms · ${fresh ? 'Ignored stored state' : 'Used stored state'}`;
+        if (data.status === 'error') {
+          badge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300';
+          badge.textContent = 'Check Failed';
+          body.innerHTML = `<div class="rounded-lg bg-rose-500/10 border border-rose-500/30 p-4 text-xs text-rose-300 break-words">${escapeHtml(data.error)}</div>`;
+        } else if (data.should_notify && data.message) {
+          badge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300';
+          badge.textContent = 'Would Notify';
+          body.innerHTML = `<div class="rounded-lg bg-slate-950 border border-slate-800 p-4 text-sm text-slate-200 whitespace-pre-wrap break-words leading-relaxed">${sanitizeTelegramHtml(data.message)}</div>`;
+        } else {
+          badge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300';
+          badge.textContent = 'No New Alerts';
+          const priceNote = data.metadata?.current_price !== undefined
+            ? `<div class="mt-2 text-xs text-slate-300">Observed current price: <strong>${formatPrice(data.metadata.current_price)}</strong></div>`
+            : '';
+          body.innerHTML = `<div class="rounded-lg bg-slate-950/70 border border-slate-800 p-6 text-center text-xs text-slate-400">Checker succeeded, and there are no new items/alerts compared to current state.${priceNote}</div>`;
+        }
+      } catch (err) {
+        badge.className = 'text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300';
+        badge.textContent = 'Error';
+        body.innerHTML = `<div class="rounded-lg bg-rose-500/10 border border-rose-500/30 p-4 text-xs text-rose-300">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function setCronPreset(cron) {
+      document.getElementById('schedule').value = cron;
+    }
+
+    function toggleRssField() {
+      const source = document.getElementById('source').value;
+      document.getElementById('rssUrlField').classList.toggle('hidden', source !== 'rss');
+    }
+
+    function toggleFields() {
+      const type = document.getElementById('type').value;
+      document.getElementById('priceFields').classList.toggle('hidden', type !== 'price_drop');
+      document.getElementById('jobFields').classList.toggle('hidden', type !== 'job_feed');
+      document.getElementById('factFields').classList.toggle('hidden', type !== 'cool_fact');
+      toggleRssField();
+    }
+
+    function showFormError(msg) {
+      const el = document.getElementById('formError');
+      if (!msg) {
+        el.classList.add('hidden');
+        el.textContent = '';
+      } else {
+        el.textContent = msg;
+        el.classList.remove('hidden');
+      }
+    }
+
+    function openAddModal() {
+      editingIndex = null;
+      editingParamsBackup = {};
+      showFormError('');
+      document.getElementById('jobForm').reset();
+      document.getElementById('type').value = 'job_feed';
+      document.getElementById('schedule').value = '0 */1 * * *';
+      document.getElementById('limit').value = '10';
+      document.getElementById('modalTitle').textContent = 'Add New Job';
+      document.getElementById('submitBtn').textContent = 'Add Job';
+      toggleFields();
+      document.getElementById('jobModal').classList.remove('hidden');
+    }
+
+    function closeJobModal() {
+      document.getElementById('jobModal').classList.add('hidden');
+    }
+
+    function editJob(index) {
+      const j = cachedJobs.find(item => item.index === index);
+      if (!j) return;
+      editingIndex = index;
+      editingParamsBackup = { ...(j.params || {}) };
+      showFormError('');
+
+      document.getElementById('name').value = j.name;
+      document.getElementById('type').value = j.type;
+      document.getElementById('schedule').value = j.schedule;
+      document.getElementById('chatId').value = j.target_chat_id || '';
+      toggleFields();
+
+      if (j.type === 'price_drop') {
+        document.getElementById('url').value = j.params?.url || '';
+        document.getElementById('selector').value = j.params?.css_selector || '';
+        document.getElementById('targetPrice').value = j.params?.target_price ?? '';
+      } else if (j.type === 'cool_fact') {
+        document.getElementById('factSource').value = j.params?.source || 'uselessfacts';
+        document.getElementById('factLanguage').value = j.params?.language || 'en';
+      } else {
+        document.getElementById('source').value = j.params?.source || 'remotive';
+        document.getElementById('keyword').value = j.params?.keyword || '';
+        document.getElementById('country').value = j.params?.country || '';
+        document.getElementById('limit').value = j.params?.limit ?? 10;
+        document.getElementById('rssUrl').value = j.params?.url || '';
+        toggleRssField();
+      }
+
+      document.getElementById('modalTitle').textContent = 'Edit Job';
+      document.getElementById('submitBtn').textContent = 'Save Changes';
+      document.getElementById('jobModal').classList.remove('hidden');
+    }
+
+    document.getElementById('jobForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showFormError('');
+      const type = document.getElementById('type').value;
+      let params;
+      if (type === 'price_drop') {
+        params = {
+          url: document.getElementById('url').value.trim(),
+          css_selector: document.getElementById('selector').value.trim(),
+          target_price: parseFloat(document.getElementById('targetPrice').value || '0'),
+        };
+      } else if (type === 'cool_fact') {
+        params = {
+          source: document.getElementById('factSource').value,
+          language: document.getElementById('factLanguage').value,
+        };
+      } else {
+        const source = document.getElementById('source').value;
+        const country = document.getElementById('country').value.trim();
+        const rssUrl = document.getElementById('rssUrl').value.trim();
+        const limitVal = parseInt(document.getElementById('limit').value || '10', 10);
+        params = {
+          ...(editingIndex !== null ? editingParamsBackup : {}),
+          source,
+          keyword: document.getElementById('keyword').value.trim(),
+          limit: Number.isNaN(limitVal) ? 10 : limitVal,
+        };
+        if (country) params.country = country;
+        else delete params.country;
+        if (source === 'rss' && rssUrl) params.url = rssUrl;
+        else if (source !== 'rss') delete params.url;
+      }
+
+      const endpoint = editingIndex === null ? '/api/jobs' : `/api/jobs/${editingIndex}`;
+      const method = editingIndex === null ? 'POST' : 'PUT';
+      try {
+        const res = await fetch(endpoint, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: document.getElementById('name').value.trim(),
+            type,
+            schedule: document.getElementById('schedule').value.trim(),
+            target_chat_id: document.getElementById('chatId').value.trim() || null,
+            params,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showFormError(data.detail || 'Could not save job');
+          return;
+        }
+        const savedAction = editingIndex === null ? 'added' : 'updated';
+        editingIndex = null;
+        closeJobModal();
+        showToast(`Job ${savedAction} and live schedule updated`, 'success');
+        await refreshAll();
+      } catch (err) {
+        showFormError(err.message);
+      }
+    });
+
+    async function toggleJob(index) {
+      try {
+        const res = await fetch(`/api/jobs/${index}/toggle`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Toggle failed');
+        showToast(data.enabled ? 'Job enabled and scheduled' : 'Job paused', 'info');
+        await refreshAll();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteJob(index) {
+      const job = cachedJobs.find(item => item.index === index);
+      const name = job ? job.name : `job #${index}`;
+      if (!confirm(`Delete "${name}"? This removes it from jobs.yaml and clears its saved state.`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/jobs/${index}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Delete failed');
+        showToast(`Deleted "${name}"`, 'info');
+        await refreshAll();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    function isAnyModalOpen() {
+      return !document.getElementById('jobModal').classList.contains('hidden')
+        || !document.getElementById('previewModal').classList.contains('hidden');
+    }
+
+    setInterval(() => {
+      if (!isAnyModalOpen()) {
+        refreshAll(false);
+      }
+    }, 15000);
+
+    refreshAll(false);
+  </script>
+</body>
+</html>
+

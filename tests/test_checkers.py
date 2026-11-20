@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 
+from src.checkers.cool_fact import CoolFactChecker
 from src.checkers.job_feed import JobFeedChecker
 from src.checkers.price_drop import PriceDropChecker
 from src.storage import StateStorage
@@ -50,4 +51,38 @@ def test_price_drop_alerts_when_below_target(monkeypatch):
     # Same price on next check -> do not notify again
     res2 = checker.check(params, res1.new_state)
     assert res2.should_notify is False
+
+
+def test_cool_fact_fetches_and_deduplicates(monkeypatch):
+    responses = [
+        {
+            "id": "fact-1",
+            "text": "Octopuses have three hearts.",
+            "source": "djtech.net",
+            "permalink": "https://uselessfacts.jsph.pl/api/v2/facts/fact-1",
+        },
+        {
+            "id": "fact-2",
+            "text": "Honey never spoils.",
+            "source": "djtech.net",
+            "permalink": "https://uselessfacts.jsph.pl/api/v2/facts/fact-2",
+        },
+    ]
+    call_idx = {"i": 0}
+
+    def fake_get(*args, **kwargs):
+        resp = MagicMock()
+        resp.json.return_value = responses[call_idx["i"]]
+        call_idx["i"] += 1
+        return resp
+
+    monkeypatch.setattr("src.checkers.cool_fact.httpx.get", fake_get)
+
+    checker = CoolFactChecker()
+    result = checker.check({"source": "uselessfacts", "language": "en"}, {"seen_ids": ["uselessfacts:fact-1"]})
+
+    assert result.should_notify is True
+    assert "Honey never spoils." in result.message
+    assert result.new_state == {"seen_ids": ["uselessfacts:fact-1", "uselessfacts:fact-2"]}
+
 

@@ -10,6 +10,8 @@ from src.checkers.base import BaseChecker, CheckResult
 
 def _parse_price(raw_text: str) -> float:
     cleaned = re.sub(r"[^\d.,]", "", raw_text).replace(",", "")
+    if not cleaned:
+        raise ValueError(f"Could not parse price from text: {raw_text!r}")
     return float(cleaned)
 
 
@@ -28,7 +30,7 @@ class PriceDropChecker(BaseChecker):
         soup = BeautifulSoup(response.text, "html.parser")
         element = soup.select_one(selector)
         if element is None:
-            return CheckResult(should_notify=False)
+            raise ValueError(f"CSS selector {selector!r} matched no element")
 
         current_price = _parse_price(element.get_text(strip=True))
         should_alert = current_price <= target_price and (
