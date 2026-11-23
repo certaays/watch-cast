@@ -54,7 +54,7 @@ def main() -> None:
     parser.add_argument("--db", default="data/state.db", help="Path to SQLite state database")
     parser.add_argument("--run-once", action="store_true", help="Run all enabled jobs once and exit")
     parser.add_argument("--no-web", action="store_true", help="Run scheduler only without the web dashboard")
-    parser.add_argument("--host", default=os.getenv("WATCHCAST_HOST", "0.0.0.0"), help="Web dashboard bind host")
+    parser.add_argument("--host", default=os.getenv("WATCHCAST_HOST", "127.0.0.1"), help="Web dashboard bind host")
     parser.add_argument("--port", type=int, default=int(os.getenv("WATCHCAST_PORT", "8000")), help="Web dashboard port")
     args = parser.parse_args()
 
