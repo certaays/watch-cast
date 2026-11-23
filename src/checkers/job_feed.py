@@ -189,6 +189,59 @@ def _fetch_rss(keyword: str, limit: int, params: dict[str, Any]) -> list[dict[st
     return results
 
 
+def _fetch_jooble(keyword: str, limit: int, params: dict[str, Any]) -> list[dict[str, str]]:
+    api_key = os.getenv("JOOBLE_API_KEY", "")
+    if not api_key:
+        raise ValueError("JOOBLE_API_KEY is required for jooble source")
+    location = params.get("location", "Malaysia")
+    resp = httpx.post(
+        f"https://jooble.org/api/{api_key}",
+        json={"keywords": keyword, "location": location},
+        timeout=15.0,
+    )
+    resp.raise_for_status()
+    return [
+        {
+            "id": f"jooble:{j.get('id') or j.get('link')}",
+            "title": j.get("title", "Untitled"),
+            "company": j.get("company", "Unknown"),
+            "location": j.get("location", location),
+            "url": j.get("link", ""),
+        }
+        for j in resp.json().get("jobs", [])[:limit]
+    ]
+
+
+def _fetch_careerjet(keyword: str, limit: int, params: dict[str, Any]) -> list[dict[str, str]]:
+    affid = os.getenv("CAREERJET_AFFID", "")
+    if not affid:
+        raise ValueError("CAREERJET_AFFID is required for careerjet source")
+    locale = params.get("locale", "en_MY")
+    resp = httpx.get(
+        "http://public.api.careerjet.net/search",
+        params={
+            "locale_code": locale,
+            "keywords": keyword,
+            "affid": affid,
+            "pagesize": limit,
+            "user_ip": "127.0.0.1",
+            "user_agent": "watchcast/1.0",
+        },
+        timeout=15.0,
+    )
+    resp.raise_for_status()
+    return [
+        {
+            "id": f"careerjet:{j.get('url')}",
+            "title": j.get("title", "Untitled"),
+            "company": j.get("company", "Unknown"),
+            "location": j.get("locations", locale),
+            "url": j.get("url", ""),
+        }
+        for j in resp.json().get("jobs", [])[:limit]
+    ]
+
+
 SOURCE_FETCHERS: dict[str, Callable[[str, int, dict[str, Any]], list[dict[str, str]]]] = {
     "remotive": _fetch_remotive,
     "arbeitnow": _fetch_arbeitnow,
@@ -198,6 +251,8 @@ SOURCE_FETCHERS: dict[str, Callable[[str, int, dict[str, Any]], list[dict[str, s
     "jsearch": _fetch_jsearch,
     "adzuna": _fetch_adzuna,
     "rss": _fetch_rss,
+    "jooble": _fetch_jooble,
+    "careerjet": _fetch_careerjet,
 }
 
 
